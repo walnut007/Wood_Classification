@@ -1,0 +1,80 @@
+from data_wood import load_data
+import random
+import numpy
+from keras.models import Sequential
+from keras.layers import Dense
+from keras.layers import Dropout
+from keras.layers import Flatten
+from keras.constraints import maxnorm
+from keras.optimizers import SGD
+from keras.layers.convolutional import Convolution2D
+from keras.layers.convolutional import MaxPooling2D
+from keras.utils import np_utils
+import matplotlib.pyplot as plt
+from keras import backend as K
+K.set_image_dim_ordering('th')
+seed=7
+numpy.random.seed(seed)
+
+data, label = load_data()
+index = [i for i in range(len(data))]
+random.shuffle(index)
+data = data[index]
+label = label[index]
+X_train=data[:-200]
+y_train=label[:-200]
+X_test=data[-200:]
+y_test=label[-200:]
+
+# normalize inputs from 0-255 to 0.0-1.0
+X_train = X_train.astype('float32')
+X_test = X_test.astype('float32')
+X_train = X_train / 255.0
+X_test = X_test / 255.0
+
+# one hot encode outputs
+y_train = np_utils.to_categorical(y_train)
+y_test = np_utils.to_categorical(y_test)
+num_classes = y_test.shape[1]
+
+# Create the model
+model = Sequential()
+model.add(Convolution2D(64, 3, 3, input_shape=(3, 100, 100), border_mode='same', activation='relu', W_constraint=maxnorm(3)))
+model.add(Dropout(0.2))
+model.add(MaxPooling2D(pool_size=(2, 2)))
+model.add(Convolution2D(32, 3, 3, activation='relu', border_mode='same', W_constraint=maxnorm(3)))
+model.add(Dropout(0.2))
+model.add(MaxPooling2D(pool_size=(2, 2)))
+model.add(Convolution2D(32, 3, 3, activation='relu', border_mode='same', W_constraint=maxnorm(3)))
+model.add(Dropout(0.2))
+model.add(MaxPooling2D(pool_size=(2, 2)))
+model.add(Flatten())
+model.add(Dense(512, activation='relu', W_constraint=maxnorm(3)))
+model.add(Dropout(0.5))
+model.add(Dense(num_classes, activation='softmax'))
+# Compile model
+epochs = 25
+lrate = 0.01
+decay = lrate/epochs
+sgd = SGD(lr=lrate, momentum=0.9, decay=decay, nesterov=False)
+model.compile(loss='categorical_crossentropy', optimizer=sgd, metrics=['accuracy'])
+print(model.summary())
+
+# Fit the model
+history=model.fit(X_train, y_train, validation_data=(X_test, y_test), nb_epoch=epochs, batch_size=32)
+# list all data in history
+print(history.history.keys())
+# summarize history for accuracy
+plt.plot(history.history['acc'])
+plt.plot(history.history['val_acc'])
+plt.title('model accuracy')
+plt.ylabel('accuracy')
+plt.xlabel('epoch')
+plt.legend(['train', 'test'], loc='bottom right')
+plt.show()
+
+# Final evaluation of the model
+
+scores = model.evaluate(X_test, y_test, verbose=0)
+print("Accuracy: %.2f%%" % (scores[1]*100))
+
